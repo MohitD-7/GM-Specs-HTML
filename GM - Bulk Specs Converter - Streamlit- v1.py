@@ -990,7 +990,7 @@ def main():
             progress_bar.progress(0)
             
     st.markdown("---")
-    st.markdown("<p style='text-align: center; color: gray;'>Developed by Mohit Dhaker © 2024</p>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center; color: gray;'>Developed by Mohit Dhaker © 2025</p>", unsafe_allow_html=True)
 
 
 if __name__ == "__main__":
