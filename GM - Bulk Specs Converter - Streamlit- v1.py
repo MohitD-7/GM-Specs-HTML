@@ -328,7 +328,7 @@ def generate_formatted_html_for_tab(raw_data_rows, region):
             has_value_content = any(str(v).strip() for v in cell_values_raw)
 
             care_headers = ["graphic care instructions", "washing instructions", "washing options",
-                            "drying options", "removing wrinkles","Care Essentials","Maintenance"]
+                            "drying options", "removing wrinkles","care essentials","maintenance"]
             if cell_title_lower in care_headers or care_instructions_started:
                 if last_header: 
                     spec_row_html = f'<tr>\n<th class="th150" style="text-align: left;">{last_header}</th>\n<td>{("<br>".join(current_td_contents))}</td>\n</tr>'
