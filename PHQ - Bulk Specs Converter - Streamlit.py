@@ -1030,7 +1030,7 @@ def main():
         # Use columns to place logo to the right
         col1, col2 = st.columns([4,1])
         with col1:
-            st.title("PatioHQ Specs HTML - Tabs & Dropdowns)")
+            st.title("PatioHQ Specs HTML - Tabs & Dropdowns")
         with col2:
             st.image(logo_path, width=113)
     else:
