@@ -489,7 +489,6 @@ def generate_tabbed_html(tabs_data, region, auto_width_enabled, th150_width_inpu
         --secondary-neutral: #F2EFE4;
         --secondary-orange: #DE6E26;
         --secondary-sage: #707A5C;
-        /* Derived/utility shades for subtlety and theming */
         --light-sage: #dde2d4;
         --lighter-neutral: #f9f7f1;
         --border-sage: #b8bfab;
@@ -498,7 +497,7 @@ def generate_tabbed_html(tabs_data, region, auto_width_enabled, th150_width_inpu
     }}
 
     * {{ font-family: nunitoregular, sans-serif; font-size: 14px; box-sizing: border-box; margin: 0; padding: 0; }}
-    .content-wrapper {{ /* Used for single tab layout */
+    .content-wrapper {{ 
         border: 1px solid var(--border-sage);
         border-radius: 5px;
         padding: 25px 20px;
@@ -509,7 +508,7 @@ def generate_tabbed_html(tabs_data, region, auto_width_enabled, th150_width_inpu
     }}
     .newSpecificationBox {{
         box-shadow: 0 1px 3px var(--shadow-color);
-        background-color: transparent; /* Content bg is now secondary-neutral or from .content-wrapper */
+        background-color: transparent; 
         margin-bottom: 25px;
         padding: 0;
         border: none;
@@ -674,7 +673,6 @@ def generate_tabbed_html(tabs_data, region, auto_width_enabled, th150_width_inpu
         --secondary-neutral: #F2EFE4;
         --secondary-orange: #DE6E26;
         --secondary-sage: #707A5C;
-        /* Derived/utility shades for subtlety and theming */
         --light-sage: #dde2d4; 
         --lighter-neutral: #f9f7f1; 
         --border-sage: #b8bfab; 
@@ -723,13 +721,13 @@ def generate_tabbed_html(tabs_data, region, auto_width_enabled, th150_width_inpu
         background: var(--secondary-neutral);
         border-bottom: 1px solid var(--secondary-neutral);
         border-top: 2px solid var(--secondary-orange);
-        padding-top: 9px; /* Adjust for thicker top border */
+        padding-top: 9px; 
         color: var(--secondary-orange);
         z-index: 2;
     }}
     .newSpecificationBox {{
         box-shadow: 0 1px 3px var(--shadow-color);
-        background-color: transparent; /* Content bg is now secondary-neutral from .tab-content */
+        background-color: transparent; 
         margin-bottom: 25px;
         padding: 0;
         border: none;
