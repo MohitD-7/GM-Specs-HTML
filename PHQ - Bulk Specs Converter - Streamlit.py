@@ -920,11 +920,7 @@ def run_conversion_logic(input_file_buffer, input_filename_for_output, th150_wid
                         us_html = generate_tabbed_html(current_sku_tabs_data, 'us', auto_width_enabled, th150_width_manual)
                         uk_html = generate_tabbed_html(current_sku_tabs_data, 'uk', auto_width_enabled, th150_width_manual)
                         output_rows.extend([
-                            [current_sku, 'default', us_html],
-                            [current_sku, 'canada', us_html],
-                            [current_sku, 'unitedkingdom', uk_html],
-                            [current_sku, 'australia', uk_html],
-                            [current_sku, 'newzealand', uk_html]
+                            [current_sku, 'default', us_html]
                         ])
                     except Exception as e:
                         error_details = traceback.format_exc()
