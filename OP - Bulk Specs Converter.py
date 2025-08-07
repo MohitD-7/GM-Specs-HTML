@@ -682,10 +682,10 @@ def generate_tabbed_html(tabs_data, region, auto_width_enabled, th150_width_inpu
     ul {{ margin: 0 0 15px 0; padding-left: 25px; list-style: disc; }}
     li {{ margin-bottom: 6px; line-height: 1.5; }}
     p.note {{
-        margin-top: 15px; margin-bottom: 15px;
+        margin-top: 5px; margin-bottom: 5px;
         font-style: italic; color: #555;
         background-color: #f9f9f9;
-        padding: 12px 15px;
+        padding: 12px 15px;F
         border-left: 4px solid #ccc;
     }}
     .productDetails > p.note:first-child {{ margin-top: 0; }}
@@ -888,11 +888,11 @@ def main():
         # Use columns to place logo to the right
         col1, col2 = st.columns([4,1])
         with col1:
-            st.title("GM Specs HTML Converter (Tabs & Dropdowns)")
+            st.title("OP Specs HTML Converter (Tabs & Dropdowns)")
         with col2:
             st.image(logo_path, width=113)
     else:
-        st.title("GM Specs HTML Converter (Tabs & Dropdowns)")
+        st.title("OP Specs HTML Converter (Tabs & Dropdowns)")
         st.caption("Logo (VO-Logo.png) not found.")
 
 
