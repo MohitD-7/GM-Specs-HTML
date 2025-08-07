@@ -269,17 +269,18 @@ def generate_formatted_html_for_tab(raw_data_rows, region):
     current_td_contents = []
     section_notes = []
 
+    # This is the logic that generates the HTML. It remains unchanged from the previous answer.
     for item in processed_block:
         if isinstance(item, dict) and item.get('type') == 'details':
             if last_header: 
                 spec_row = f'<tr>\n<th class="th150" style="text-align: left;">{last_header}</th>\n<td>{("<br>".join(current_td_contents))}</td>\n</tr>'
                 current_spec_section_rows.append(spec_row)
                 last_header = None; current_td_contents = []
-
+    
             details_html = '<details>\n'
             details_html += f'<summary>{item["summary"]}</summary>\n'
             has_nested_content = False
-
+    
             if item['header']: 
                 details_html += '<table>\n<thead>\n<tr>\n'
                 header_classes = ["th-nested-1", "th-nested-2", "th-nested-3", "th-nested-4", "th-nested-5"]
@@ -289,7 +290,7 @@ def generate_formatted_html_for_tab(raw_data_rows, region):
                     details_html += f'<th class="{css_class}">{header_text}</th>\n'
                 details_html += '</tr>\n</thead>\n<tbody>\n'
                 has_nested_content = True
-
+    
                 for data_row_cells in item['data']:
                      if any(str(cell).strip() for cell in data_row_cells):
                         details_html += '<tr>\n'
@@ -311,7 +312,7 @@ def generate_formatted_html_for_tab(raw_data_rows, region):
             if not has_nested_content: 
                 details_html += '<p style="margin-left: 20px; margin-top: 10px;">No details available.</p>\n'
             details_html += '</details>'
-
+    
             details_label = item["label"]
             spec_row = f'<tr>\n<th class="th150" style="text-align: left;">{details_label}</th>\n<td>{details_html}</td>\n</tr>'
             current_spec_section_rows.append(spec_row)
@@ -321,12 +322,12 @@ def generate_formatted_html_for_tab(raw_data_rows, region):
         elif isinstance(item, list):
             row = item
             if not any(cell for cell in row): continue
-
+    
             cell_title = process_cell(row[title_col_idx], False) if len(row) > title_col_idx else "" # process_cell
             cell_title_lower = cell_title.lower()
             cell_values_raw = row[value_cols_start_idx:] if len(row) > value_cols_start_idx else []
             has_value_content = any(str(v).strip() for v in cell_values_raw)
-
+    
             care_headers = ["graphic care instructions", "washing instructions", "washing options",
                             "drying options", "removing wrinkles","care essentials","maintenance"]
             if cell_title_lower in care_headers or care_instructions_started:
@@ -335,7 +336,7 @@ def generate_formatted_html_for_tab(raw_data_rows, region):
                     current_spec_section_rows.append(spec_row_html)
                     last_header = None; current_td_contents = []
                 if not care_instructions_started: care_instructions_started = True
-
+    
                 if cell_title_lower in care_headers:
                     if list_open: care_instructions_html_parts.append("</ul>"); list_open = False
                     care_instructions_html_parts.append(f"<h3>{cell_title}</h3>")
@@ -345,6 +346,15 @@ def generate_formatted_html_for_tab(raw_data_rows, region):
                         if processed_val:
                             for line in processed_val.split('<br>'):
                                 if line: care_instructions_html_parts.append(f"<li>{line}</li>")
+                
+                elif cell_title_lower.startswith("warning:"):
+                    if list_open: care_instructions_html_parts.append("</ul>"); list_open = False
+                    warning_text = cell_title + " " + " ".join(filter(None, [str(v).strip() for v in cell_values_raw]))
+                    if warning_text.lower().startswith("warning:"): warning_text = warning_text[8:].strip()
+                    hyperlink = '<a href="http://www.P65Warnings.ca.gov/product" target="_blank">www.P65Warnings.ca.gov/product</a>'
+                    warning_html = f'<p class="warning"><strong>WARNING:</strong> {process_cell(warning_text)} (For more information, go to {hyperlink})</p>'
+                    care_instructions_html_parts.append(warning_html)
+    
                 elif cell_title_lower.startswith("note:"):
                     if list_open: care_instructions_html_parts.append("</ul>"); list_open = False
                     note_text = cell_title + " " + " ".join(filter(None, [str(v).strip() for v in cell_values_raw]))
@@ -359,6 +369,18 @@ def generate_formatted_html_for_tab(raw_data_rows, region):
                              if line: care_instructions_html_parts.append(f"<li>{line}</li>")
                 continue
             else:
+                if cell_title_lower.startswith("warning:"):
+                    if last_header: 
+                        spec_row_html = f'<tr>\n<th class="th150" style="text-align: left;">{last_header}</th>\n<td>{("<br>".join(current_td_contents))}</td>\n</tr>'
+                        current_spec_section_rows.append(spec_row_html)
+                        last_header = None; current_td_contents = []
+                    warning_text = cell_title + " " + " ".join(filter(None, [str(v).strip() for v in cell_values_raw]))
+                    if warning_text.lower().startswith("warning:"): warning_text = warning_text[8:].strip()
+                    hyperlink = '<a href="http://www.P65Warnings.ca.gov/product" target="_blank">www.P65Warnings.ca.gov/product</a>'
+                    warning_html = f'<p class="warning"><strong>WARNING:</strong> {process_cell(warning_text)} (For more information, go to {hyperlink})</p>'
+                    section_notes.append(warning_html)
+                    continue
+    
                 if cell_title_lower.startswith("note:"):
                     if last_header: 
                         spec_row_html = f'<tr>\n<th class="th150" style="text-align: left;">{last_header}</th>\n<td>{("<br>".join(current_td_contents))}</td>\n</tr>'
@@ -368,7 +390,7 @@ def generate_formatted_html_for_tab(raw_data_rows, region):
                     if note_text.lower().startswith("note:"): note_text = note_text[5:].strip()
                     section_notes.append(f'<p class="note"><strong>Note:</strong> {process_cell(note_text)}</p>') # process_cell
                     continue
-
+    
                 is_section_title = bool(cell_title) and not has_value_content
                 if is_section_title:
                     if last_header: 
@@ -533,12 +555,18 @@ def generate_tabbed_html(tabs_data, region, auto_width_enabled, th150_width_inpu
     .care-box h3 {{ margin-top: 0; }}
     ul {{ margin: 0 0 15px 0; padding-left: 25px; list-style: disc; }}
     li {{ margin-bottom: 6px; line-height: 1.5; }}
-    p.note {{
-        margin-top: 15px; margin-bottom: 15px;
-        font-style: italic; color: #555;
+        p.note, p.warning {{
+        margin-top: 5px; margin-bottom: 5px;
+        font-style: italic;
+        color: #555;
         background-color: #f9f9f9;
         padding: 12px 15px;
         border-left: 4px solid #ccc;
+    }}
+    p.warning a {{
+        color: #0056b3; /* A standard link color */
+        text-decoration: underline;
+        font-style: normal; /* Ensure link text itself isn't italic */
     }}
     .productDetails > p.note:first-child {{ margin-top: 0; }}
     summary {{
@@ -681,12 +709,18 @@ def generate_tabbed_html(tabs_data, region, auto_width_enabled, th150_width_inpu
     .care-box h3 {{ margin-top: 0; }}
     ul {{ margin: 0 0 15px 0; padding-left: 25px; list-style: disc; }}
     li {{ margin-bottom: 6px; line-height: 1.5; }}
-    p.note {{
+        p.note, p.warning {{
         margin-top: 5px; margin-bottom: 5px;
-        font-style: italic; color: #555;
+        font-style: italic;
+        color: #555;
         background-color: #f9f9f9;
-        padding: 12px 15px;F
+        padding: 12px 15px;
         border-left: 4px solid #ccc;
+    }}
+    p.warning a {{
+        color: #0056b3; /* A standard link color */
+        text-decoration: underline;
+        font-style: normal; /* Ensure link text itself isn't italic */
     }}
     .productDetails > p.note:first-child {{ margin-top: 0; }}
     summary {{
