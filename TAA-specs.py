@@ -857,11 +857,11 @@ def main():
     if os.path.exists(logo_path):
         col1_title, col2_logo = st.columns([4,1])
         with col1_title:
-            st.title("GM Specs HTML Converter")
+            st.title("TAA Specs HTML Converter")
         with col2_logo:
             st.image(logo_path, width=113)
     else:
-        st.title("GM Specs HTML Converter")
+        st.title("TAA Specs HTML Converter")
         st.caption("Logo (VO-Logo.png) not found in script directory.")
 
     with st.expander("Help / Instructions", expanded=False):
