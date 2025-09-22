@@ -10,7 +10,7 @@ import io  # For BytesIO
 
 import streamlit as st
 
-# --- Instructions HTML (Copied from PyQt App) ---
+# --- Instructions HTML (Same as before) ---
 def get_instructions_html():
     return """
     <h1>Specs HTML Converter User Guide</h1>
@@ -164,9 +164,8 @@ def get_instructions_html():
     </ul>
     """
 
-# --- Helper Functions ---
+# --- Helper Functions (Same as before) ---
 def is_number(s):
-    """Checks if a value is numeric (int or float), handling strings."""
     if s is None: return False
     if isinstance(s, (int, float)): return not math.isnan(s)
     s_str = str(s).strip()
@@ -178,7 +177,6 @@ def is_number(s):
         return False
 
 def process_cell(content, replace_newlines=True):
-    """Processes cell content: converts to string, strips, handles newlines."""
     content_str = str(content).strip() if content is not None else ""
     if not content_str:
         return ""
@@ -187,20 +185,12 @@ def process_cell(content, replace_newlines=True):
     lines = [line.strip() for line in content_str.split('\n') if line.strip()]
     return '<br>'.join(lines) if len(lines) > 1 else content_str
 
-# --- Core HTML Generation Logic ---
+# --- Core HTML Generation Logic (Same as before) ---
 def generate_formatted_html_for_tab(raw_data_rows, region):
-    """
-    Generates HTML for specs, care, notes, and details for a SINGLE tab's data block.
-    Args:
-        raw_data_rows: List of lists, where each inner list is a row's cell values (strings).
-        region: 'us' or 'uk'.
-    Returns:
-        Dictionary: {'specs_html': str, 'care_html': str, 'header_lengths': list}
-    """
     if not raw_data_rows:
         return {'specs_html': '', 'care_html': '', 'header_lengths': []}
 
-    title_col_idx = 1 if region == 'us' else 4 # Column B for US, Column E for UK
+    title_col_idx = 1 if region == 'us' else 4
     value_cols_start_idx = 2 if region == 'us' else 5
 
     processed_block = []
@@ -217,15 +207,14 @@ def generate_formatted_html_for_tab(raw_data_rows, region):
                     str(potential_trigger_row[title_col_idx]).strip()):
 
                 details_title = process_cell(potential_trigger_row[title_col_idx], False)
-                summary_text = f"Click to view"
+                summary_text = "Click to view"
 
                 if region == 'us':
                     header_end_idx = min(title_col_idx + 3, len(row))
                     details_header_row_raw = [row[idx] for idx in range(title_col_idx, header_end_idx)]
-                else: # UK
+                else:
                     details_header_row_raw = [row[idx] for idx in range(title_col_idx, len(row))]
                 details_header_row = [process_cell(c, False) for c in details_header_row_raw if str(c).strip()]
-
 
                 details_data_rows = []
                 data_row_idx = i + 1
@@ -238,9 +227,8 @@ def generate_formatted_html_for_tab(raw_data_rows, region):
                     if region == 'us':
                         data_end_idx = min(title_col_idx + 3, len(current_data_row_list))
                         data_cells_raw = [current_data_row_list[idx] for idx in range(title_col_idx, data_end_idx)]
-                    else: # UK
+                    else:
                         data_cells_raw = [current_data_row_list[idx] for idx in range(title_col_idx, len(current_data_row_list))]
-
 
                     if marker_cell_str.lower() == 'end':
                         details_data_rows.append([process_cell(c, True) for c in data_cells_raw])
@@ -261,7 +249,7 @@ def generate_formatted_html_for_tab(raw_data_rows, region):
                 })
                 i += 1
             else:
-                st.warning(f"Warning: Found 'Start' marker at index {i} without a valid preceding title row for region '{region}'. Treating as normal data.")
+                st.warning(f"Warning: Found 'Start' marker at index {i} without a valid preceding title row for region '{region}'.")
                 if potential_trigger_row: processed_block.append(potential_trigger_row)
                 processed_block.append(row)
                 i += 1
@@ -341,7 +329,7 @@ def generate_formatted_html_for_tab(raw_data_rows, region):
                 us_value_cols_end_idx = 4
                 actual_end_idx = min(us_value_cols_end_idx, len(row))
                 cell_values_raw = row[value_cols_start_idx:actual_end_idx] if len(row) > value_cols_start_idx else []
-            else: # For 'uk'
+            else:
                 cell_values_raw = row[value_cols_start_idx:] if len(row) > value_cols_start_idx else []
             
             has_value_content = any(str(v).strip() for v in cell_values_raw)
@@ -371,7 +359,7 @@ def generate_formatted_html_for_tab(raw_data_rows, region):
                     if note_text.lower().startswith("note:"): note_text = note_text[5:].strip()
                     care_instructions_html_parts.append(f'<p class="note"><strong>Note:</strong> {process_cell(note_text)}</p>')
                 else:
-                    if not list_open and (cell_title or has_value_content) : # Open list if there's content
+                    if not list_open and (cell_title or has_value_content) :
                         care_instructions_html_parts.append("<ul>"); list_open = True
                     full_instruction_text = (cell_title + " " if cell_title else "") + " ".join(filter(None, [str(v).strip() for v in cell_values_raw]))
                     processed_instruction = process_cell(full_instruction_text, True)
@@ -444,8 +432,12 @@ def generate_formatted_html_for_tab(raw_data_rows, region):
 
     return {'specs_html': specs_tab_html, 'care_html': care_tab_html, 'header_lengths': header_lengths}
 
+# ==============================================================================
+# === MODIFIED FUNCTION: generate_tabbed_html                                ===
+# === This function now contains the final, unified CSS style block.         ===
+# ==============================================================================
 def generate_tabbed_html(tabs_data, region, auto_width_enabled, th150_width_input_value):
-    """ Generates the complete HTML structure for tabs """
+    """ Generates the complete HTML structure with the final, integrated styles. """
     if not tabs_data: return ""
 
     all_header_lengths = []
@@ -476,7 +468,8 @@ def generate_tabbed_html(tabs_data, region, auto_width_enabled, th150_width_inpu
 
     if not radio_buttons_html: return "<p>No specification data available for this product in this region.</p>"
 
-    final_th150_width = '180px'
+    # --- Dynamic Width Calculation (same as before) ---
+    final_th150_width = '160px' # Default from new style
     if auto_width_enabled:
          if all_header_lengths:
              try:
@@ -490,119 +483,8 @@ def generate_tabbed_html(tabs_data, region, auto_width_enabled, th150_width_inpu
              final_th150_width = '180px'
     elif th150_width_input_value:
         final_th150_width = th150_width_input_value
-    
-    single_tab_style = f"""<style>
-    * {{ font-family: nunitoregular, sans-serif; font-size: 14px; box-sizing: border-box; margin: 0; padding: 0; }}
-    .content-wrapper {{
-        border: 1px solid #ccc;
-        border-radius: 5px;
-        padding: 25px 20px;
-        background: #fff;
-        position: relative;
-        width: 100%;
-        clear: both;
-    }}
-    .newSpecificationBox {{
-        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-        background-color: #fff;
-        margin-bottom: 25px;
-        padding: 0; 
-        border: none; 
-        border-radius: 0; 
-    }}
-    .newSpecificationBox.care-box {{
-        padding: 0 15px; 
-    }}
-    .newSpecificationBox:last-child {{ margin-bottom: 0; border-bottom: 2px solid #e0e0e0;}}
-    .productDetails {{ width: 100%; }}
-    .productDetailsSection {{
-        width: 100%;
-        border-collapse: collapse;
-        margin-bottom: 20px;
-    }}
-    .productDetails > h3 + .productDetailsSection {{ margin-top: 0px; }}
-    .productDetails > *:last-child {{ margin-bottom: 0 !important; }}
-    .productDetailsSection tr:nth-child(odd) td, .productDetailsSection tr:nth-child(odd) th {{ background-color: #f9f9f9; }}
-    .productDetailsSection tr:nth-child(even) td, .productDetailsSection tr:nth-child(even) th {{ background-color: #fff; }}
-    .productDetailsSection th, .productDetailsSection td {{
-        padding: 14px 18px;
-        border-bottom: 1px solid #eee;
-        text-align: left;
-        vertical-align: top;
-    }}
-    .productDetailsSection tr:last-child th, .productDetailsSection tr:last-child td {{
-        border-bottom: none;
-    }}
-    .th150 {{
-        width: {final_th150_width}; 
-        padding-right: 25px;
-        font-weight: normal;
-        vertical-align: top;
-    }}
-    h3 {{
-        font-size: 14px;
-        font-weight: bold;
-        padding: 5px 10px;
-        margin-top: 30px;
-        margin-bottom: 12px;
-        color: #333;
-    }}
-    .productDetails > h3:first-child {{ margin-top: 0; }}
-    .care-box h3 {{ margin-top: 0; }}
-    ul {{ margin: 0 0 15px 0; padding-left: 25px; list-style: disc; }}
-    li {{ margin-bottom: 6px; line-height: 1.5; }}
-    p.note {{
-        margin-top: 15px; margin-bottom: 15px;
-        font-style: italic; color: #555;
-        background-color: #f9f9f9;
-        padding: 12px 15px;
-        border-left: 4px solid #ccc;
-    }}
-    .productDetails > p.note:first-child {{ margin-top: 0; }}
-    summary {{
-        cursor: pointer;
-        display: inline-block; 
-        padding: 5px 10px;
-        border-radius: 4px;
-        background-color: #f0f0f0;
-        border: 1px solid #ccc;
-        margin-bottom: 8px; 
-        margin-top: -8px; 
-        font-weight: normal;
-        transition: background-color 0.2s ease;
-        color: #333;
-    }}
-    summary:hover {{ background-color: #e0e0e0; }}
-    summary::marker {{ display: none; content: ""; }}
-    details {{ margin-top: 5px; }}
-    details[open] > summary {{ margin-bottom: 10px; }}
-    details > table {{
-        margin-top: 10px; 
-        width: 98%; 
-        max-width: 700px; 
-        border-collapse: collapse;
-        margin-left: 5px; 
-        border: 1px solid #ddd; 
-        font-size: 13px; 
-    }}
-    details > table th, details > table td {{
-        border: 1px solid #ddd;
-        padding: 8px 10px;
-        text-align: left;
-        vertical-align: middle; 
-        background-color: #fff; 
-    }}
-    details > table th {{
-        background-color: #f7f7f7; 
-        font-weight: bold;
-        border-bottom: 2px solid #d0d0d0; 
-    }}
-    details > table tbody tr:nth-child(even) td {{ background-color: #fcfcfc; }}
-</style>"""
 
-    if len(active_tab_ids) == 1:
-        return single_tab_style + '\n\n<div class="content-wrapper">\n' + tab_contents_html[0] + '\n</div>'
-
+    # --- Dynamic Tab Selector Generation (same as before) ---
     tab_content_selectors = []
     tab_label_selectors = []
     for tab_id in active_tab_ids:
@@ -610,113 +492,138 @@ def generate_tabbed_html(tabs_data, region, auto_width_enabled, th150_width_inpu
          tab_content_selectors.append(f'#{tab_id}:checked ~ #{content_id}')
          tab_label_selectors.append(f'#{tab_id}:checked ~ label[for="{tab_id}"]')
 
-    multi_tab_style = f"""<style>
+    # --- NEW UNIFIED STYLE BLOCK (from your Tkinter app, but with dynamic parts) ---
+    final_style_block = f"""
+<style>
     * {{ font-family: nunitoregular, sans-serif; font-size: 14px; box-sizing: border-box; margin: 0; padding: 0; }}
+    .content-wrapper {{
+        background: #fbfbfb;
+        position: relative;
+        width: 100%;
+        clear: both;
+        border: 1px solid #ccc;
+        border-radius: 5px;
+        padding: 25px 20px;
+    }}
     .tabs {{ width: 100%; margin-bottom: 20px; position: relative; clear: both; }}
     .tabs input[type="radio"] {{ display: none; }}
     .tabs label {{
         display: inline-block;
         padding: 10px 18px;
-        background: #f1f1f1; 
+        background: #FFF2E8;
         border: 1px solid #ccc;
-        border-bottom: none; 
-        border-radius: 5px 5px 0 0; 
-        margin-top: 10px; 
+        border-bottom: none;
+        border-radius: 5px 5px 0 0;
+        margin-top: 10px;
         margin-right: 3px;
         margin-left: 3px;
-        margin-bottom: -1px; 
+        margin-bottom: -1px;
         cursor: pointer;
         font-weight: bold;
         position: relative;
-        z-index: 1; 
+        z-index: 1;
         transition: background-color 0.2s ease, color 0.2s ease;
     }}
     .tabs label:hover {{ background-color: #e1e1e1; }}
     .tabs .tab-content {{
-        display: none; 
+        display: none;
         border: 1px solid #ccc;
-        border-radius: 0 5px 5px 5px; 
-        padding: 25px 20px; 
+        border-radius: 0 5px 5px 5px;
+        padding: 25px 20px;
         background: #fff;
         position: relative;
         width: 100%;
         clear: both;
-        margin-top: 0; 
+        margin-top: 0;
     }}
-    {', '.join(tab_content_selectors)} {{ display: block; }}
+    /* DYNAMICALLY GENERATED TAB SELECTORS */
     {', '.join(tab_label_selectors)} {{
-        background: #fff; 
-        border-bottom: 1px solid #fff; 
-        z-index: 2; 
-        color: #333; 
+        background: #fff !important;
+        border-bottom: 1px solid #fff !important;
+        z-index: 2;
+        color: #333;
+    }}
+    {', '.join(tab_content_selectors)} {{ 
+        display: block; 
     }}
     .newSpecificationBox {{
-        box-shadow: 0 1px 3px rgba(0,0,0,0.1); background-color: #fff; margin-bottom: 25px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1); background-color: #fff; margin-bottom: 25px;
         padding: 0; border: none; border-radius: 0;
     }}
-    .newSpecificationBox.care-box {{ padding: 0 5px; }}
-    .newSpecificationBox:last-child {{ margin-bottom: 0; border-bottom: 2px solid #e0e0e0;}}
+    .newSpecificationBox.care-box {{ padding: 0 15px; }}
+    .newSpecificationBox:last-child {{ margin-bottom: 0; border-bottom: 2px solid #e0e0e0; }}
     .productDetails {{ width: 100%; }}
     .productDetailsSection {{
         width: 100%; border-collapse: collapse; margin-bottom: 20px;
     }}
-    .productDetails > h3 + .productDetailsSection {{ margin-top: 0px; }}
-    .productDetails > *:last-child {{ margin-bottom: 0 !important; }}
-    .productDetailsSection tr:nth-child(odd) td, .productDetailsSection tr:nth-child(odd) th {{ background-color: #f9f9f9; }}
+    .productDetails>h3+.productDetailsSection {{ margin-top: 0px; }}
+    .productDetails>*:last-child {{ margin-bottom: 0 !important; }}
+    .productDetailsSection tr:nth-child(odd) td, .productDetailsSection tr:nth-child(odd) th {{ background-color: #FFF2E8; }}
     .productDetailsSection tr:nth-child(even) td, .productDetailsSection tr:nth-child(even) th {{ background-color: #fff; }}
     .productDetailsSection th, .productDetailsSection td {{
-        padding: 14px 18px; border-bottom: 1px solid #eee; text-align: left; vertical-align: top;
+        padding: 14px 18px !important; border-bottom: 1px solid #eee; text-align: left; vertical-align: top;
     }}
-     .productDetailsSection tr:last-child th, .productDetailsSection tr:last-child td {{
-        border-bottom: none;
-    }}
+    .productDetailsSection tr:last-child th, .productDetailsSection tr:last-child td {{ border-bottom: none; }}
     .th150 {{
-        width: {final_th150_width}; padding-right: 25px; font-weight: normal; vertical-align: top;
+        width: {final_th150_width};
+        padding-right: 25px; font-weight: normal; vertical-align: top;
     }}
     h3 {{
-        font-size: 14px; font-weight: bold; margin-top: 30px; margin-bottom: 12px; color: #333;
+        font-size: 14px; font-weight: bold; padding: 5px 10px; margin-top: 30px; margin-bottom: 12px; color: #333;
     }}
-    .productDetails > h3:first-child {{ margin-top: 0; }}
+    .productDetails>h3:first-child {{ margin-top: 0; }}
     .care-box h3 {{ margin-top: 0; }}
     ul {{ margin: 0 0 15px 0; padding-left: 25px; list-style: disc; }}
     li {{ margin-bottom: 6px; line-height: 1.5; }}
     p.note {{
         margin-top: 15px; margin-bottom: 15px; font-style: italic; color: #555;
-        background-color: #f9f9f9; padding: 12px 15px; border-left: 4px solid #ccc;
+        background-color: #FFF2E8; padding: 12px 15px; border-left: 4px solid #ccc;
     }}
-    .productDetails > p.note:first-child {{ margin-top: 0; }}
+    .productDetails>p.note:first-child {{ margin-top: 0; }}
     summary {{
-        cursor: pointer; display: inline-block; padding: 5px 10px; border-radius: 4px;
-        background-color: #f0f0f0; border: 1px solid #ccc; margin-bottom: 8px; margin-top: -8px;
-        font-weight: normal; transition: background-color 0.2s ease; color: #333;
+        cursor: pointer; display: inline-block; padding: 5px 10px; border-radius: 4px; background-color: #f0f0f0;
+        border: 1px solid #ccc; margin-bottom: 8px; margin-top: -8px; font-weight: normal;
+        transition: background-color 0.2s ease; color: #333;
     }}
     summary:hover {{ background-color: #e0e0e0; }}
     summary::marker {{ display: none; content: ""; }}
     details {{ margin-top: 5px; }}
-    details[open] > summary {{ margin-bottom: 10px; }}
-    details > table {{
+    details[open]>summary {{ margin-bottom: 10px; }}
+    details>table {{
         margin-top: 10px; width: 98%; max-width: 700px; border-collapse: collapse;
         margin-left: 5px; border: 1px solid #ddd; font-size: 13px;
     }}
-    details > table th, details > table td {{
+    details>table th, details>table td {{
         border: 1px solid #ddd; padding: 8px 10px; text-align: left;
         vertical-align: middle; background-color: #fff;
     }}
-    details > table th {{
+    details>table th {{
         background-color: #f7f7f7; font-weight: bold; border-bottom: 2px solid #d0d0d0;
     }}
-    details > table tbody tr:nth-child(even) td {{ background-color: #fcfcfc; }}
-</style>"""
+    details>table tbody tr:nth-child(even) td {{ background-color: #fcfcfc; }}
+    @media only screen and (max-width: 767px) {{
+        .content-wrapper {{ font-size: 14px; }}
+        .th150 {{ width: 165px; }}
+    }}
+</style>
+"""
 
-    html_output = multi_tab_style + '\n\n'
-    html_output += '<div class="tabs">\n'
-    html_output += '    <!-- Tab Radio Buttons (Hidden) -->\n'
-    html_output += '    ' + '\n    '.join(radio_buttons_html) + '\n\n'
-    html_output += '    <!-- Tab Labels -->\n'
-    html_output += '    ' + '\n    '.join(labels_html) + '\n\n'
-    html_output += '    <!-- Tab Content Panes -->\n'
-    html_output += '    ' + '\n    '.join(tab_contents_html) + '\n'
-    html_output += '</div> <!-- end tabs -->\n'
+    # --- HTML Structure Generation ---
+    # Handle single tab case (no tab bar)
+    if len(active_tab_ids) == 1:
+        single_tab_content = tab_contents_html[0].replace('<div class="tab-content"', '<div class="single-tab-content"', 1)
+        html_output = final_style_block + '\n\n<div class="content-wrapper">\n' + single_tab_content + '\n</div>'
+    # Handle multi-tab case
+    else:
+        html_output = final_style_block + '\n\n'
+        html_output += '<div class="tabs">\n'
+        html_output += '    <!-- Tab Radio Buttons (Hidden) -->\n'
+        html_output += '    ' + '\n    '.join(radio_buttons_html) + '\n\n'
+        html_output += '    <!-- Tab Labels -->\n'
+        html_output += '    ' + '\n    '.join(labels_html) + '\n\n'
+        html_output += '    <!-- Tab Content Panes -->\n'
+        html_output += '    ' + '\n    '.join(tab_contents_html) + '\n'
+        html_output += '</div> <!-- end tabs -->\n'
 
     try:
         soup = BeautifulSoup(html_output, 'html.parser')
@@ -728,14 +635,10 @@ def generate_tabbed_html(tabs_data, region, auto_width_enabled, th150_width_inpu
         return html_output
 
 
+# --- Core Conversion Logic (Same as before) ---
 def run_conversion_logic(input_file_buffer, th150_width_manual, auto_width_enabled, progress_bar, status_area):
-    """
-    Core conversion logic.
-    Returns a tuple (output_dataframe, error_message_string)
-    """
     try:
         df = pd.read_excel(input_file_buffer, header=None, na_filter=False, dtype=str)
-        # Apply strip to all cells to remove leading/trailing whitespace
         df = df.apply(lambda x: x.str.strip() if x.dtype == "object" else x)
     except Exception as e:
         err_msg = f"Error reading Excel file: {str(e)}. Ensure it's closed and not corrupted."
@@ -790,12 +693,10 @@ def run_conversion_logic(input_file_buffer, th150_width_manual, auto_width_enabl
                 else:
                      status_area.info(f"Info: SKU '{current_sku}' had no processable specification/tab data rows.")
 
-            # --- Start New SKU ---
             current_sku = first_cell_value
             current_sku_tabs_data = []
             current_tab_data_rows = []
-            # The SKU row itself is NOT added to current_tab_data_rows.
-            continue # Done with this row
+            continue
 
         if current_sku is not None:
             if is_tab_marker:
@@ -849,7 +750,7 @@ def run_conversion_logic(input_file_buffer, th150_width_manual, auto_width_enabl
     return output_df, None
 
 
-# --- Streamlit Application UI ---
+# --- Streamlit Application UI (Same as before) ---
 def main():
     st.set_page_config(page_title="Specs HTML Converter", layout="wide")
 
@@ -929,7 +830,6 @@ def main():
                     st.markdown("---")
                     st.markdown("### Preview of Generated HTML (first 5 rows):")
                     
-                    # Create a preview-friendly version of the DataFrame
                     preview_df = output_df[['SKU', 'Region']].copy()
                     preview_df['HTML_Preview (Scrollable)'] = output_df['HTML'].apply(
                         lambda x: f'<div style="max-height: 200px; overflow-y: auto; border: 1px solid #eee; padding: 5px; background-color: #f9f9f9; font-size:12px; white-space: pre-wrap; word-wrap: break-word;">{x[:2000]}{"..." if len(x)>2000 else ""}</div>'
@@ -937,7 +837,6 @@ def main():
                     st.markdown(preview_df.head().to_html(escape=False, index=False), unsafe_allow_html=True)
                 
                 elif error_msg:
-                    # An error or warning was already displayed by run_conversion_logic
                     progress_bar_container.empty()
 
                 else: 
