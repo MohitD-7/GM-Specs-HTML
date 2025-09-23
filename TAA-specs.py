@@ -10,7 +10,7 @@ import io  # For BytesIO
 
 import streamlit as st
 
-# --- Instructions HTML (Same as before) ---
+# --- Instructions HTML ---
 def get_instructions_html():
     return """
     <h1>Specs HTML Converter User Guide</h1>
@@ -147,6 +147,7 @@ def get_instructions_html():
     <h2 id="troubleshooting">6. Troubleshooting</h2>
     <ul>
         <li><strong>File Read Error:</strong> Ensure the Excel file is closed in other applications (like Excel itself). Verify it's a valid .xlsx file.</li>
+        <li><strong>Percentages (e.g., 50%) showing as decimals (0.5):</strong> This tool is designed to read all data as text to prevent this. If it still occurs, ensure the cells in Excel are formatted as 'Text' before entering the percentage value.</li>
         <li><strong>No Output / Incorrect HTML / `No valid SKU data...` Error:</strong>
             <ul>
                 <li>Double-check the Excel structure against the "Preparing Your Input" guide. Pay close attention to column usage for SKUs (Col A, must be first row for the product, this row itself is not output as a spec), Tab Markers (Col A, numeric), Tab Titles (Col B, on same row as Tab Marker), US data (B, C, D), UK data (E, F, G...), "Start"/"End" markers (Col A), and Care Headers/Notes (Col B/E).</li>
@@ -158,13 +159,12 @@ def get_instructions_html():
                 <li>Rows with just 'US' or 'UK' in Column A should exist but are ignored for data processing.</li>
             </ul>
         </li>
-         <li><strong>`NameError` in HTML Generation:</strong> This often points to an issue in the CSS generation within the Python code (like the 'content' error). Report this specific error.</li>
          <li><strong>Auto Width Issues:</strong> If auto-width seems too wide or narrow, try setting a manual width (e.g., "180px"). Very long headers in collapsible sections can sometimes affect auto-width calculation.</li>
         <li><strong>Other Errors:</strong> Check the message in the application's text box for specific error details or consult the console output if running from source.</li>
     </ul>
     """
 
-# --- Helper Functions (Same as before) ---
+# --- Helper Functions ---
 def is_number(s):
     if s is None: return False
     if isinstance(s, (int, float)): return not math.isnan(s)
@@ -185,7 +185,7 @@ def process_cell(content, replace_newlines=True):
     lines = [line.strip() for line in content_str.split('\n') if line.strip()]
     return '<br>'.join(lines) if len(lines) > 1 else content_str
 
-# --- Core HTML Generation Logic (Same as before) ---
+# --- Core HTML Generation Logic ---
 def generate_formatted_html_for_tab(raw_data_rows, region):
     if not raw_data_rows:
         return {'specs_html': '', 'care_html': '', 'header_lengths': []}
@@ -432,12 +432,7 @@ def generate_formatted_html_for_tab(raw_data_rows, region):
 
     return {'specs_html': specs_tab_html, 'care_html': care_tab_html, 'header_lengths': header_lengths}
 
-# ==============================================================================
-# === MODIFIED FUNCTION: generate_tabbed_html                                ===
-# === This function now contains the final, unified CSS style block.         ===
-# ==============================================================================
 def generate_tabbed_html(tabs_data, region, auto_width_enabled, th150_width_input_value):
-    """ Generates the complete HTML structure with the final, integrated styles. """
     if not tabs_data: return ""
 
     all_header_lengths = []
@@ -468,8 +463,7 @@ def generate_tabbed_html(tabs_data, region, auto_width_enabled, th150_width_inpu
 
     if not radio_buttons_html: return "<p>No specification data available for this product in this region.</p>"
 
-    # --- Dynamic Width Calculation (same as before) ---
-    final_th150_width = '160px' # Default from new style
+    final_th150_width = '160px'
     if auto_width_enabled:
          if all_header_lengths:
              try:
@@ -484,7 +478,6 @@ def generate_tabbed_html(tabs_data, region, auto_width_enabled, th150_width_inpu
     elif th150_width_input_value:
         final_th150_width = th150_width_input_value
 
-    # --- Dynamic Tab Selector Generation (same as before) ---
     tab_content_selectors = []
     tab_label_selectors = []
     for tab_id in active_tab_ids:
@@ -492,7 +485,6 @@ def generate_tabbed_html(tabs_data, region, auto_width_enabled, th150_width_inpu
          tab_content_selectors.append(f'#{tab_id}:checked ~ #{content_id}')
          tab_label_selectors.append(f'#{tab_id}:checked ~ label[for="{tab_id}"]')
 
-    # --- NEW UNIFIED STYLE BLOCK (from your Tkinter app, but with dynamic parts) ---
     final_style_block = f"""
 <style>
     * {{ font-family: nunitoregular, sans-serif; font-size: 14px; box-sizing: border-box; margin: 0; padding: 0; }}
@@ -608,12 +600,9 @@ def generate_tabbed_html(tabs_data, region, auto_width_enabled, th150_width_inpu
 </style>
 """
 
-    # --- HTML Structure Generation ---
-    # Handle single tab case (no tab bar)
     if len(active_tab_ids) == 1:
         single_tab_content = tab_contents_html[0].replace('<div class="tab-content"', '<div class="single-tab-content"', 1)
         html_output = final_style_block + '\n\n<div class="content-wrapper">\n' + single_tab_content + '\n</div>'
-    # Handle multi-tab case
     else:
         html_output = final_style_block + '\n\n'
         html_output += '<div class="tabs">\n'
@@ -635,15 +624,13 @@ def generate_tabbed_html(tabs_data, region, auto_width_enabled, th150_width_inpu
         return html_output
 
 
-# --- Core Conversion Logic (Same as before) ---
 def run_conversion_logic(input_file_buffer, th150_width_manual, auto_width_enabled, progress_bar, status_area):
-
     try:
-        # --- THIS IS THE MODIFIED LINE ---
-        # We add dtype=str to ensure all data, including percentages, is read as text.
+        # ==============================================================================
+        # === KEY CHANGE: Added dtype=str to read all cells as text                  ===
+        # ==============================================================================
         df = pd.read_excel(input_file_buffer, header=None, na_filter=False, dtype=str)
         
-        # This next line is good practice but optional since dtype=str handles most cases.
         df = df.apply(lambda x: x.str.strip() if x.dtype == "object" else x)
         
     except Exception as e:
@@ -756,7 +743,7 @@ def run_conversion_logic(input_file_buffer, th150_width_manual, auto_width_enabl
     return output_df, None
 
 
-# --- Streamlit Application UI (Same as before) ---
+# --- Streamlit Application UI ---
 def main():
     st.set_page_config(page_title="Specs HTML Converter", layout="wide")
 
@@ -764,11 +751,11 @@ def main():
     if os.path.exists(logo_path):
         col1_title, col2_logo = st.columns([4,1])
         with col1_title:
-            st.title("TAA Specs HTML Converter")
+            st.title("GM Specs HTML Converter")
         with col2_logo:
             st.image(logo_path, width=113)
     else:
-        st.title("TAA Specs HTML Converter")
+        st.title("GM Specs HTML Converter")
         st.caption("Logo (VO-Logo.png) not found in script directory.")
 
     with st.expander("Help / Instructions", expanded=False):
