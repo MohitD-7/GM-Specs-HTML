@@ -2,19 +2,53 @@
 import sys
 import os
 import pandas as pd
-import math  # Import math for isnan check
+import math
 import traceback
 from bs4 import BeautifulSoup
 from datetime import datetime
-import io  # For BytesIO
+import io
+import openpyxl # <-- Import the openpyxl library
 
 import streamlit as st
 
-# --- Instructions HTML ---
+# ==============================================================================
+# === NEW HELPER FUNCTION TO READ EXCEL CORRECTLY                            ===
+# ==============================================================================
+def read_excel_with_formatting(file_buffer):
+    """
+    Reads an Excel file using openpyxl to preserve number formats like percentages.
+    Returns a Pandas DataFrame.
+    """
+    workbook = openpyxl.load_workbook(file_buffer)
+    sheet = workbook.active
+    
+    data = []
+    for row in sheet.iter_rows():
+        row_data = []
+        for cell in row:
+            # Check if the cell has a number format and its value is numeric
+            if cell.number_format and isinstance(cell.value, (int, float)):
+                if '%' in cell.number_format:
+                    # It's a percentage, format it correctly
+                    # Multiplying by 100 and adding '%'
+                    formatted_value = f"{cell.value * 100:.{15}f}".rstrip('0').rstrip('.') + '%'
+                    row_data.append(formatted_value)
+                else:
+                    # It's another number format, just append the value as string
+                    row_data.append(str(cell.value) if cell.value is not None else "")
+            else:
+                # Not a number or no special format, just append the value as string
+                row_data.append(str(cell.value) if cell.value is not None else "")
+        data.append(row_data)
+        
+    # Create DataFrame from the manually processed data
+    return pd.DataFrame(data)
+
+
+# --- Instructions HTML (Same as before) ---
 def get_instructions_html():
     return """
     <h1>Specs HTML Converter User Guide</h1>
-
     <h2>Table of Contents</h2>
     <ol>
         <li><a href="#introduction">Introduction</a></li>
@@ -24,7 +58,6 @@ def get_instructions_html():
         <li><a href="#understanding-the-output">Understanding the Output</a></li>
         <li><a href="#troubleshooting">Troubleshooting</a></li>
     </ol>
-
     <h2 id="introduction">1. Introduction</h2>
     <p>The Specs HTML Converter is designed to convert product specifications from Excel format into beautifully formatted HTML. It supports:</p>
     <ul>
@@ -34,8 +67,6 @@ def get_instructions_html():
         <li>Dedicated Care Instruction sections.</li>
         <li>Notes within specification or care sections.</li>
     </ul>
-
-
     <h2 id="getting-started">2. Getting Started</h2>
     <p>To use the Specs HTML Converter:</p>
     <ol>
@@ -45,7 +76,6 @@ def get_instructions_html():
         <li>Configure the width settings if needed (Auto width is recommended).</li>
         <li>Click "Convert to HTML" to generate the output Excel file.</li>
     </ol>
-
     <h2 id="using-the-application">3. Using the Application</h2>
     <ol>
         <li>Click "Browse files" to choose your Excel file (.xlsx).</li>
@@ -54,10 +84,8 @@ def get_instructions_html():
         <li>Progress will be shown, and a message will appear upon completion or error.</li>
         <li>The output is saved as a new Excel file that you can download.</li>
     </ol>
-
     <h2 id="preparing-your-input">4. Preparing Your Input (Tabs & Details)</h2>
     <p>Prepare an Excel (.xlsx) file. The structure depends on whether you have a single product or a package with tabs:</p>
-
     <h3>A. General Structure:</h3>
     <ul>
         <li><b>Column A:</b> Contains the SKU for the product/package OR a numeric marker (1, 2, 3...) to indicate the start of a new Tab within a package. Leave blank for continuation rows, "Start", or "End" markers. (The SKU row itself is for identification and will not be rendered as a spec line in the HTML table).</li>
@@ -75,95 +103,430 @@ def get_instructions_html():
          <li><b>Care Instructions:</b> Use headers like "Graphic Care Instructions", "Washing Instructions", etc., in the appropriate column (B for US, E for UK) to start a care section within a SKU or Tab. Subsequent rows list instructions or notes.</li>
          <li><b>Notes:</b> Start a cell in the relevant 'title' column (B for US, E for UK) with "Note:" (case-insensitive) to create a formatted note block.</li>
     </ul>
-
     <h3>B. Creating Tabs (for Package SKUs):</h3>
     <ol>
         <li>Enter the main Package SKU in Column A of the first row for that package. (This row identifies the package; its other columns are not rendered as specs).</li>
         <li>For the first tab, add a row below the SKU row:
             <ul><li>Enter '1' in Column A.</li><li>Enter the desired <strong>Tab Title</strong> (e.g., "Frame Details") in Column B.</li></ul>
         </li>
-        <li>Add the specification rows, care instructions, notes, and any collapsible sections for this first tab below the Tab Title row. Data for US/CA goes in columns B, C, D and data for UK/AU/NZ goes in columns E, F, G ... Rows starting with just 'US' or 'UK' in Column A are ignored.</li>
+        <li>Add the specification rows for this first tab below the Tab Title row.</li>
         <li>For the second tab, add a new row:
              <ul><li>Enter '2' in Column A.</li><li>Enter the <strong>Tab Title</strong> for the second tab (e.g., "Graphic Specs") in Column B.</li></ul>
         </li>
          <li>Add the data rows for the second tab below its title row.</li>
-         <li>Repeat for any subsequent tabs (using '3', '4', etc. in Column A).</li>
-         <li>The data rows following a tab marker belong to that tab until the next tab marker or a new SKU is encountered.</li>
     </ol>
-     <p><b>Example Structure (Package SKU with Tabs):</b></p>
-    <pre>
-    | Col A    | Col B                 | Col C            | Col D | Col E (UK Title)     | Col F (UK Value) | Col G (UK Value2) |
-    |----------|-----------------------|------------------|-------|----------------------|------------------|-------------------|
-    | PKGSKU01 | Description...        | URL...           |       | Description UK...    | URL UK...        |                   | &lt;- SKU row, not rendered as spec
-    | US       |                       |                  |       |                      |                  |                   | &lt;- This row ignored
-    | 1        | Frame Specifications  |                  |       | Frame Specs UK       |                  |                   | &lt;- Tab Title row
-    |          | Material              | Aluminum         |       | Material             | Aluminium        |                   |
-    |          | Weight                | 5 kg             |       | Weight               | 5 kg             |                   |
-    | 2        | Canopy Details        |                  |       | Canopy Details UK    |                  |                   |
-    |          | Fabric Type           | Polyester        |       | Fabric Type          | Polyester        |                   |
-    |          | Graphic Care...       | Wipe clean only  |       | Graphic Care...      | Wipe clean only  |                   |
-    |          | Note:                 | Handle with care |       | Note:                | Handle with care |                   |
-    </pre>
-
     <h3>C. Creating Collapsible Sections (within a SKU or Tab):</h3>
-    <p>These work the same way whether inside a tab or a regular SKU's data.</p>
     <ol>
-        <li>Add a row with the main title for the section (e.g., "Dimensions & Weights") in the appropriate title column (B for US, E for UK).</li>
+        <li>Add a row with the main title for the section (e.g., "Dimensions & Weights").</li>
         <li>Immediately below this title row, add a row with:
             <ul>
                 <li>"Start" (case-insensitive) in Column A.</li>
-                <li>The <b>header row</b> data for the nested table starting from the appropriate title column (B for US headers in B,C,D; E for UK headers in E,F,G).</li>
+                <li>The <b>header row</b> data for the nested table.</li>
             </ul>
         </li>
-        <li>Add the subsequent data rows for the nested table (Column A empty, data starts in appropriate columns B,C,D for US or E,F,G for UK).</li>
+        <li>Add the subsequent data rows for the nested table.</li>
         <li>Immediately after the last data row for the nested table, add a row with:
              <ul>
                 <li>"End" (case-insensitive) in Column A.</li>
-                <li>The data for the *last row* of the nested table starting from the appropriate columns.</li>
+                <li>The data for the *last row* of the nested table.</li>
             </ul>
         </li>
     </ol>
-    <p><b>Example (Collapsible Section within US data):</b></p>
-    <pre>
-    | Column A | Column B             | Column C           | Column D          | Column E... |
-    |----------|----------------------|--------------------|-------------------|-------------|
-    |          | Flag Size (W x H)... |                    |                   | (UK Data...) |
-    | Start    | 1.5' x 5.5'          | 8.86' (3 poles)    |                   |             |
-    |          | 2' x 7.5'            | 11.48' (4 poles)   |                   |             |
-    | ...      | ...                  | ...                | ...               |             |
-    | End      | 2.5' x 15.5'         | 18.04' (5 poles)   |                   |             |
-    |          | Total Package Weight | 44 lbs             |                   |             |
-    </pre>
-
-
     <h2 id="understanding-the-output">5. Understanding the Output</h2>
     <ul>
         <li>The application produces a new Excel file named like `YourInputFile_output_YYYYMMDD_HHMMSS.xlsx`.</li>
         <li>It contains columns: SKU, Region, HTML.</li>
-        <li>Each input SKU will have multiple rows in the output, one for each target region (default, canada, unitedkingdom, australia, newzealand).</li>
-        <li>The HTML column contains the fully formatted HTML, including styles, tabs (if applicable), collapsible sections, tables, lists, and notes, ready to be used.</li>
+        <li>The HTML column contains the fully formatted HTML, including styles and dynamic elements.</li>
     </ul>
-
     <h2 id="troubleshooting">6. Troubleshooting</h2>
     <ul>
-        <li><strong>File Read Error:</strong> Ensure the Excel file is closed in other applications (like Excel itself). Verify it's a valid .xlsx file.</li>
-        <li><strong>Percentages (e.g., 50%) showing as decimals (0.5):</strong> This tool is designed to read all data as text to prevent this. If it still occurs, ensure the cells in Excel are formatted as 'Text' before entering the percentage value.</li>
-        <li><strong>No Output / Incorrect HTML / `No valid SKU data...` Error:</strong>
-            <ul>
-                <li>Double-check the Excel structure against the "Preparing Your Input" guide. Pay close attention to column usage for SKUs (Col A, must be first row for the product, this row itself is not output as a spec), Tab Markers (Col A, numeric), Tab Titles (Col B, on same row as Tab Marker), US data (B, C, D), UK data (E, F, G...), "Start"/"End" markers (Col A), and Care Headers/Notes (Col B/E).</li>
-                 <li>Ensure the *very first row* for each product/package has the SKU in Column A.</li>
-                 <li>Ensure Tab Markers (1, 2...) are numeric and in Column A, with Tab Titles immediately following in Column B.</li>
-                <li>Verify "Start" is on the same row as the *headers* of the collapsible table, and "End" is on the same row as the *last data row* of that table.</li>
-                <li>Check for hidden characters or extra spaces, especially in marker cells (A, B, E).</li>
-                <li>Make sure specification data exists in the correct columns for US and UK regions on rows *after* the SKU identification row.</li>
-                <li>Rows with just 'US' or 'UK' in Column A should exist but are ignored for data processing.</li>
-            </ul>
-        </li>
-         <li><strong>Auto Width Issues:</strong> If auto-width seems too wide or narrow, try setting a manual width (e.g., "180px"). Very long headers in collapsible sections can sometimes affect auto-width calculation.</li>
-        <li><strong>Other Errors:</strong> Check the message in the application's text box for specific error details or consult the console output if running from source.</li>
+        <li><strong>File Read Error:</strong> Ensure the Excel file is closed in other applications.</li>
+        <li><strong>Percentages (e.g., 50%) showing as decimals (0.5):</strong> This version of the tool is designed to prevent this. If it still occurs, it's a very unusual case; please report it.</li>
+        <li><strong>No Output / Incorrect HTML:</strong> Double-check the Excel structure against the guide. Pay close attention to markers like SKUs, Tab numbers, and "Start"/"End".</li>
     </ul>
     """
 
 # --- Helper Functions ---
 def is_number(s):
-    if s is None: retur
+    if s is None: return False
+    s_str = str(s).strip()
+    if not s_str: return False
+    try:
+        val = float(s_str)
+        return not math.isnan(val)
+    except (ValueError, TypeError):
+        return False
+
+def process_cell(content, replace_newlines=True):
+    content_str = str(content).strip() if content is not None else ""
+    if not content_str:
+        return ""
+    if not replace_newlines:
+        return content_str
+    lines = [line.strip() for line in content_str.split('\n') if line.strip()]
+    return '<br>'.join(lines) if len(lines) > 1 else content_str
+
+# --- Core HTML Generation Logic (No changes needed here) ---
+def generate_formatted_html_for_tab(raw_data_rows, region):
+    if not raw_data_rows:
+        return {'specs_html': '', 'care_html': '', 'header_lengths': []}
+    title_col_idx = 1 if region == 'us' else 4
+    value_cols_start_idx = 2 if region == 'us' else 5
+    processed_block = []
+    i = 0
+    while i < len(raw_data_rows):
+        row = raw_data_rows[i]
+        first_cell_raw = row[0] if len(row) > 0 else ""
+        first_cell_lower = str(first_cell_raw).strip().lower()
+        if first_cell_lower == 'start' and processed_block:
+            potential_trigger_row = processed_block.pop()
+            if (isinstance(potential_trigger_row, list) and len(potential_trigger_row) > title_col_idx and str(potential_trigger_row[title_col_idx]).strip()):
+                details_title = process_cell(potential_trigger_row[title_col_idx], False)
+                summary_text = "Click to view"
+                if region == 'us':
+                    header_end_idx = min(title_col_idx + 3, len(row))
+                    details_header_row_raw = [row[idx] for idx in range(title_col_idx, header_end_idx)]
+                else:
+                    details_header_row_raw = [row[idx] for idx in range(title_col_idx, len(row))]
+                details_header_row = [process_cell(c, False) for c in details_header_row_raw if str(c).strip()]
+                details_data_rows = []
+                data_row_idx = i + 1
+                while data_row_idx < len(raw_data_rows):
+                    current_data_row_list = raw_data_rows[data_row_idx]
+                    marker_cell_raw = current_data_row_list[0] if len(current_data_row_list) > 0 else ""
+                    marker_cell_str = str(marker_cell_raw).strip()
+                    if region == 'us':
+                        data_end_idx = min(title_col_idx + 3, len(current_data_row_list))
+                        data_cells_raw = [current_data_row_list[idx] for idx in range(title_col_idx, data_end_idx)]
+                    else:
+                        data_cells_raw = [current_data_row_list[idx] for idx in range(title_col_idx, len(current_data_row_list))]
+                    if marker_cell_str.lower() == 'end':
+                        details_data_rows.append([process_cell(c, True) for c in data_cells_raw])
+                        i = data_row_idx
+                        break
+                    if any(str(cell).strip() for cell in data_cells_raw):
+                        details_data_rows.append([process_cell(c, True) for c in data_cells_raw])
+                    data_row_idx += 1
+                else:
+                    st.warning(f"Warning: 'Start' found for '{details_title}' but no matching 'End' marker.")
+                    processed_block.append(potential_trigger_row); i += 1; continue
+                processed_block.append({'type': 'details', 'label': details_title, 'summary': summary_text, 'header': details_header_row, 'data': details_data_rows})
+                i += 1
+            else:
+                st.warning(f"Warning: Found 'Start' marker without a valid preceding title row for region '{region}'.");
+                if potential_trigger_row: processed_block.append(potential_trigger_row)
+                processed_block.append(row); i += 1
+        else:
+            processed_block.append(row); i += 1
+    spec_sections = []; current_spec_section_rows = []; current_section_title = None; care_instructions_html_parts = []; list_open = False; header_lengths = []; care_instructions_started = False; last_header = None; current_td_contents = []; section_notes = []
+    for item in processed_block:
+        if isinstance(item, dict) and item.get('type') == 'details':
+            if last_header:
+                spec_row = f'<tr>\n<th class="th150" style="text-align: left;">{last_header}</th>\n<td>{("<br>".join(current_td_contents))}</td>\n</tr>'
+                current_spec_section_rows.append(spec_row)
+            details_html = '<details>\n' + f'<summary>{item["summary"]}</summary>\n'; has_nested_content = False
+            if item['header']:
+                details_html += '<table>\n<thead>\n<tr>\n'; col_count = len(item['header'])
+                for idx, header_text in enumerate(item['header']): details_html += f'<th>{header_text}</th>\n'
+                details_html += '</tr>\n</thead>\n<tbody>\n'; has_nested_content = True
+                for data_row_cells in item['data']:
+                     if any(str(cell).strip() for cell in data_row_cells):
+                        details_html += '<tr>\n'
+                        for cell_idx in range(col_count): cell_text = data_row_cells[cell_idx] if cell_idx < len(data_row_cells) else ""; details_html += f'<td>{cell_text}</td>\n'
+                        details_html += '</tr>\n'
+                details_html += '</tbody>\n</table>\n'
+            if not has_nested_content: details_html += '<p style="margin-left: 20px; margin-top: 10px;">No details available.</p>\n'
+            details_html += '</details>'; details_label = item["label"]
+            spec_row = f'<tr>\n<th class="th150" style="text-align: left;">{details_label}</th>\n<td>{details_html}</td>\n</tr>'
+            current_spec_section_rows.append(spec_row); header_lengths.append(len(str(details_label))); last_header = None; current_td_contents = []
+            continue
+        elif isinstance(item, list):
+            row = item
+            if not any(cell for cell in row): continue
+            cell_title_raw = row[title_col_idx] if len(row) > title_col_idx else ""; cell_title = process_cell(cell_title_raw, False); cell_title_lower = cell_title.lower()
+            if region == 'us':
+                actual_end_idx = min(4, len(row))
+                cell_values_raw = row[value_cols_start_idx:actual_end_idx] if len(row) > value_cols_start_idx else []
+            else: cell_values_raw = row[value_cols_start_idx:] if len(row) > value_cols_start_idx else []
+            has_value_content = any(str(v).strip() for v in cell_values_raw)
+            care_headers = ["graphic care instructions", "washing instructions", "washing options", "drying options", "removing wrinkles", "care essentials", "maintenance"]
+            if cell_title_lower in care_headers or (care_instructions_started and (cell_title or has_value_content)):
+                if last_header: current_spec_section_rows.append(f'<tr>\n<th class="th150" style="text-align: left;">{last_header}</th>\n<td>{("<br>".join(current_td_contents))}</td>\n</tr>'); last_header = None; current_td_contents = []
+                if not care_instructions_started: care_instructions_started = True
+                if cell_title_lower in care_headers:
+                    if list_open: care_instructions_html_parts.append("</ul>"); list_open = False
+                    care_instructions_html_parts.append(f"<h3>{cell_title}</h3>")
+                    if has_value_content:
+                        list_open = True; care_instructions_html_parts.append("<ul>")
+                        for val in cell_values_raw:
+                            processed_val = process_cell(val, True)
+                            if processed_val:
+                                for line in processed_val.split('<br>'):
+                                    if line: care_instructions_html_parts.append(f"<li>{line}</li>")
+                elif cell_title_lower.startswith("note:"):
+                    if list_open: care_instructions_html_parts.append("</ul>"); list_open = False
+                    note_text = cell_title + " " + " ".join(filter(None, [str(v).strip() for v in cell_values_raw]))
+                    if note_text.lower().startswith("note:"): note_text = note_text[5:].strip()
+                    care_instructions_html_parts.append(f'<p class="note"><strong>Note:</strong> {process_cell(note_text)}</p>')
+                else:
+                    if not list_open and (cell_title or has_value_content): care_instructions_html_parts.append("<ul>"); list_open = True
+                    full_instruction_text = (cell_title + " " if cell_title else "") + " ".join(filter(None, [str(v).strip() for v in cell_values_raw]))
+                    processed_instruction = process_cell(full_instruction_text, True)
+                    if processed_instruction:
+                         for line in processed_instruction.split('<br>'):
+                             if line: care_instructions_html_parts.append(f"<li>{line}</li>")
+                continue
+            else:
+                if cell_title_lower.startswith("note:"):
+                    if last_header: current_spec_section_rows.append(f'<tr>\n<th class="th150" style="text-align: left;">{last_header}</th>\n<td>{("<br>".join(current_td_contents))}</td>\n</tr>'); last_header = None; current_td_contents = []
+                    note_text = cell_title + " " + " ".join(filter(None, [str(v).strip() for v in cell_values_raw]))
+                    if note_text.lower().startswith("note:"): note_text = note_text[5:].strip()
+                    section_notes.append(f'<p class="note"><strong>Note:</strong> {process_cell(note_text)}</p>'); continue
+                is_section_title_candidate = bool(cell_title) and not has_value_content
+                if is_section_title_candidate:
+                    if last_header: current_spec_section_rows.append(f'<tr>\n<th class="th150" style="text-align: left;">{last_header}</th>\n<td>{("<br>".join(current_td_contents))}</td>\n</tr>')
+                    if current_spec_section_rows or current_section_title is not None or section_notes: spec_sections.append({'title': current_section_title, 'rows': current_spec_section_rows, 'notes': section_notes}); current_spec_section_rows = []; section_notes = []
+                    current_section_title = cell_title; last_header = None; current_td_contents = []
+                else:
+                    if cell_title:
+                        if last_header: current_spec_section_rows.append(f'<tr>\n<th class="th150" style="text-align: left;">{last_header}</th>\n<td>{("<br>".join(current_td_contents))}</td>\n</tr>')
+                        last_header = cell_title; header_lengths.append(len(last_header)); current_td_contents = [process_cell(v) for v in cell_values_raw if str(v).strip()]
+                    elif last_header and has_value_content:
+                        current_td_contents.extend([process_cell(v) for v in cell_values_raw if str(v).strip()])
+    if last_header: current_spec_section_rows.append(f'<tr>\n<th class="th150" style="text-align: left;">{last_header}</th>\n<td>{("<br>".join(current_td_contents))}</td>\n</tr>')
+    if current_spec_section_rows or current_section_title is not None or section_notes: spec_sections.append({'title': current_section_title, 'rows': current_spec_section_rows, 'notes': section_notes})
+    if list_open: care_instructions_html_parts.append("</ul>")
+    specs_tab_html = ""
+    if any(s.get('title') or s.get('rows') or s.get('notes') for s in spec_sections):
+        specs_box_content = '<div class="productDetails">\n'
+        for section_idx, section in enumerate(spec_sections):
+             if section.get('title'): specs_box_content += f'<h3>{section["title"]}</h3>\n'
+             if section.get('rows'): specs_box_content += '<table class="productDetailsSection">\n<tbody>\n' + '\n'.join(section['rows']) + '\n</tbody>\n</table>\n'
+             if section.get('notes'): specs_box_content += '\n'.join(section['notes']) + '\n'
+        specs_box_content += '</div>'
+        specs_tab_html = f'<div class="newSpecificationBox specs-box">\n{specs_box_content}\n</div>'
+    care_tab_html = ""
+    if any(str(part).strip() for part in care_instructions_html_parts):
+        care_box_content = '<div class="productDetails">\n' + '\n'.join(care_instructions_html_parts) + '\n</div>'
+        care_tab_html = f'<div class="newSpecificationBox care-box">\n{care_box_content}\n</div>'
+    return {'specs_html': specs_tab_html, 'care_html': care_tab_html, 'header_lengths': header_lengths}
+
+def generate_tabbed_html(tabs_data, region, auto_width_enabled, th150_width_input_value):
+    if not tabs_data: return ""
+    all_header_lengths = []; tab_contents_html = []; radio_buttons_html = []; labels_html = []; active_tab_ids = []
+    for i, tab_info in enumerate(tabs_data):
+        tab_id = f"tab{region}{i+1}"; data_block = tab_info.get('data_rows', []); tab_result = generate_formatted_html_for_tab(data_block, region)
+        if tab_result['specs_html'] or tab_result['care_html']:
+            all_header_lengths.extend(tab_result['header_lengths']); active_tab_ids.append(tab_id)
+            is_first_visible_tab = not radio_buttons_html
+            radio_buttons_html.append(f'<input type="radio" id="{tab_id}" name="tabs{region}"{" checked" if is_first_visible_tab else ""}>')
+            labels_html.append(f'<label for="{tab_id}">{process_cell(tab_info.get("title", f"Tab {i+1}"))}</label>')
+            content_id = f"content{region}{i+1}"; tab_content = f'<div class="tab-content" id="{content_id}">\n'
+            tab_content += (tab_result['specs_html'] + '\n') if tab_result['specs_html'] else ''
+            tab_content += (tab_result['care_html'] + '\n') if tab_result['care_html'] else ''
+            tab_content += '</div>'; tab_contents_html.append(tab_content)
+    if not radio_buttons_html: return "<p>No specification data available for this product in this region.</p>"
+    final_th150_width = '160px'
+    if auto_width_enabled:
+         if all_header_lengths:
+             try:
+                 max_len = max(all_header_lengths) if all_header_lengths else 0
+                 final_th150_width = f'{int(round(max(150, (max_len * 7.5) + 30) / 10.0)) * 10}px'
+             except ValueError: final_th150_width = '200px'
+         else: final_th150_width = '180px'
+    elif th150_width_input_value: final_th150_width = th150_width_input_value
+    tab_content_selectors = [f'#{tab_id}:checked ~ #content{tab_id[3:]}' for tab_id in active_tab_ids]
+    tab_label_selectors = [f'#{tab_id}:checked ~ label[for="{tab_id}"]' for tab_id in active_tab_ids]
+    final_style_block = f"""
+<style>
+    * {{ font-family: nunitoregular, sans-serif; font-size: 14px; box-sizing: border-box; margin: 0; padding: 0; }}
+    .content-wrapper {{ background: #fbfbfb; position: relative; width: 100%; clear: both; border: 1px solid #ccc; border-radius: 5px; padding: 25px 20px; }}
+    .tabs {{ width: 100%; margin-bottom: 20px; position: relative; clear: both; }}
+    .tabs input[type="radio"] {{ display: none; }}
+    .tabs label {{ display: inline-block; padding: 10px 18px; background: #FFF2E8; border: 1px solid #ccc; border-bottom: none; border-radius: 5px 5px 0 0; margin-top: 10px; margin-right: 3px; margin-left: 3px; margin-bottom: -1px; cursor: pointer; font-weight: bold; position: relative; z-index: 1; transition: background-color 0.2s ease, color 0.2s ease; }}
+    .tabs label:hover {{ background-color: #e1e1e1; }}
+    .tabs .tab-content {{ display: none; border: 1px solid #ccc; border-radius: 0 5px 5px 5px; padding: 25px 20px; background: #fff; position: relative; width: 100%; clear: both; margin-top: 0; }}
+    {', '.join(tab_label_selectors)} {{ background: #fff !important; border-bottom: 1px solid #fff !important; z-index: 2; color: #333; }}
+    {', '.join(tab_content_selectors)} {{ display: block; }}
+    .newSpecificationBox {{ box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1); background-color: #fff; margin-bottom: 25px; padding: 0; border: none; border-radius: 0; }}
+    .newSpecificationBox.care-box {{ padding: 0 15px; }}
+    .newSpecificationBox:last-child {{ margin-bottom: 0; border-bottom: 2px solid #e0e0e0; }}
+    .productDetails {{ width: 100%; }}
+    .productDetailsSection {{ width: 100%; border-collapse: collapse; margin-bottom: 20px; }}
+    .productDetails>h3+.productDetailsSection {{ margin-top: 0px; }}
+    .productDetails>*:last-child {{ margin-bottom: 0 !important; }}
+    .productDetailsSection tr:nth-child(odd) td, .productDetailsSection tr:nth-child(odd) th {{ background-color: #FFF2E8; }}
+    .productDetailsSection th, .productDetailsSection td {{ padding: 14px 18px !important; border-bottom: 1px solid #eee; text-align: left; vertical-align: top; }}
+    .productDetailsSection tr:last-child th, .productDetailsSection tr:last-child td {{ border-bottom: none; }}
+    .th150 {{ width: {final_th150_width}; padding-right: 25px; font-weight: normal; vertical-align: top; }}
+    h3 {{ font-size: 14px; font-weight: bold; padding: 5px 10px; margin-top: 30px; margin-bottom: 12px; color: #333; }}
+    .productDetails>h3:first-child, .care-box h3 {{ margin-top: 0; }}
+    ul {{ margin: 0 0 15px 0; padding-left: 25px; list-style: disc; }}
+    li {{ margin-bottom: 6px; line-height: 1.5; }}
+    p.note {{ margin-top: 15px; margin-bottom: 15px; font-style: italic; color: #555; background-color: #FFF2E8; padding: 12px 15px; border-left: 4px solid #ccc; }}
+    .productDetails>p.note:first-child {{ margin-top: 0; }}
+    summary {{ cursor: pointer; display: inline-block; padding: 5px 10px; border-radius: 4px; background-color: #f0f0f0; border: 1px solid #ccc; margin-bottom: 8px; margin-top: -8px; font-weight: normal; transition: background-color 0.2s ease; color: #333; }}
+    summary:hover {{ background-color: #e0e0e0; }}
+    summary::marker {{ display: none; content: ""; }}
+    details {{ margin-top: 5px; }}
+    details[open]>summary {{ margin-bottom: 10px; }}
+    details>table {{ margin-top: 10px; width: 98%; max-width: 700px; border-collapse: collapse; margin-left: 5px; border: 1px solid #ddd; font-size: 13px; }}
+    details>table th, details>table td {{ border: 1px solid #ddd; padding: 8px 10px; text-align: left; vertical-align: middle; background-color: #fff; }}
+    details>table th {{ background-color: #f7f7f7; font-weight: bold; border-bottom: 2px solid #d0d0d0; }}
+    details>table tbody tr:nth-child(even) td {{ background-color: #fcfcfc; }}
+    @media only screen and (max-width: 767px) {{ .content-wrapper {{ font-size: 14px; }} .th150 {{ width: 165px; }} }}
+</style>
+"""
+    if len(active_tab_ids) == 1:
+        single_tab_content = tab_contents_html[0].replace('<div class="tab-content"', '<div class="single-tab-content"', 1)
+        html_output = final_style_block + '\n\n<div class="content-wrapper">\n' + single_tab_content + '\n</div>'
+    else:
+        html_output = final_style_block + '\n\n<div class="tabs">\n' + '    \n    '.join(radio_buttons_html) + '\n\n' + '    \n    '.join(labels_html) + '\n\n' + '    \n    '.join(tab_contents_html) + '\n</div>\n'
+    try:
+        pretty_html = BeautifulSoup(html_output, 'html.parser').prettify(formatter="minimal")
+        return '\n'.join(line for line in pretty_html.split('\n') if line.strip())
+    except Exception as e:
+        st.error(f"HTML parsing error: {e}. Returning raw HTML."); return html_output
+
+# --- Core Conversion Logic ---
+def run_conversion_logic(input_file_buffer, th150_width_manual, auto_width_enabled, progress_bar, status_area):
+    try:
+        # ==============================================================================
+        # === KEY CHANGE: Using the new function to read the Excel file              ===
+        # ==============================================================================
+        df = read_excel_with_formatting(input_file_buffer)
+        df = df.apply(lambda x: x.str.strip())
+        
+    except Exception as e:
+        err_msg = f"Error reading Excel file: {str(e)}. Ensure it's closed and not corrupted."
+        status_area.error(err_msg)
+        return None, err_msg
+
+    output_rows = []
+    total_rows = len(df)
+    progress_bar.progress(0)
+    current_sku = None
+    current_sku_tabs_data = []
+    current_tab_data_rows = []
+
+    for index, row_series in df.iterrows():
+        progress_bar.progress(int((index + 1) / total_rows * 100))
+        row_as_list = row_series.tolist()
+        first_cell_value = row_as_list[0] if len(row_as_list) > 0 else ""
+
+        if first_cell_value.upper() in ['US', 'UK'] and not any(c for c in row_as_list[1:]):
+             continue
+
+        is_tab_marker = is_number(first_cell_value)
+        is_start_end_marker = first_cell_value.lower() in ['start', 'end']
+        is_potential_new_sku = bool(first_cell_value) and not is_tab_marker and not is_start_end_marker
+        
+        if is_potential_new_sku and (current_sku is None or first_cell_value != current_sku):
+            if current_sku is not None:
+                if current_tab_data_rows:
+                    if not current_sku_tabs_data:
+                         current_sku_tabs_data.append({'title': 'Details', 'data_rows': current_tab_data_rows})
+                    else:
+                         current_sku_tabs_data[-1]['data_rows'].extend(current_tab_data_rows)
+                if current_sku_tabs_data:
+                    try:
+                        us_html = generate_tabbed_html(current_sku_tabs_data, 'us', auto_width_enabled, th150_width_manual)
+                        uk_html = generate_tabbed_html(current_sku_tabs_data, 'uk', auto_width_enabled, th150_width_manual)
+                        output_rows.extend([
+                            [current_sku, 'default', us_html], [current_sku, 'canada', us_html],
+                            [current_sku, 'unitedkingdom', uk_html], [current_sku, 'australia', uk_html],
+                            [current_sku, 'newzealand', uk_html]
+                        ])
+                    except Exception as e:
+                        status_area.error(f"Error for SKU '{current_sku}': {e}\n{traceback.format_exc()}")
+                else:
+                     status_area.info(f"Info: SKU '{current_sku}' had no processable data rows.")
+            current_sku = first_cell_value
+            current_sku_tabs_data = []
+            current_tab_data_rows = []
+            continue
+
+        if current_sku is not None:
+            if is_tab_marker:
+                if current_tab_data_rows:
+                    if not current_sku_tabs_data:
+                        current_sku_tabs_data.append({'title': 'Details', 'data_rows': current_tab_data_rows})
+                    else:
+                        current_sku_tabs_data[-1]['data_rows'].extend(current_tab_data_rows)
+                current_tab_data_rows = []
+                tab_title = row_as_list[1] if len(row_as_list) > 1 and row_as_list[1] else f"Tab {int(float(first_cell_value))}"
+                current_sku_tabs_data.append({'title': tab_title, 'data_rows': []})
+            else: 
+                if any(c for c in row_as_list):
+                    current_tab_data_rows.append(row_as_list)
+
+    if current_sku is not None:
+         if current_tab_data_rows:
+             if not current_sku_tabs_data:
+                 current_sku_tabs_data.append({'title': 'Details', 'data_rows': current_tab_data_rows})
+             else:
+                 current_sku_tabs_data[-1]['data_rows'].extend(current_tab_data_rows)
+         if current_sku_tabs_data:
+            try:
+                us_html = generate_tabbed_html(current_sku_tabs_data, 'us', auto_width_enabled, th150_width_manual)
+                uk_html = generate_tabbed_html(current_sku_tabs_data, 'uk', auto_width_enabled, th150_width_manual)
+                output_rows.extend([
+                    [current_sku, 'default', us_html], [current_sku, 'canada', us_html],
+                    [current_sku, 'unitedkingdom', uk_html], [current_sku, 'australia', uk_html],
+                    [current_sku, 'newzealand', uk_html]
+                ])
+            except Exception as e:
+                status_area.error(f"Error for last SKU '{current_sku}': {e}\n{traceback.format_exc()}")
+         else:
+             status_area.info(f"Info: Last SKU '{current_sku}' had no processable data rows.")
+
+    if not output_rows:
+         err_msg = "Conversion finished, but NO valid SKU data resulted in HTML output. Please check file structure."
+         status_area.warning(err_msg)
+         return None, err_msg
+
+    return pd.DataFrame(output_rows, columns=['SKU', 'Region', 'HTML']), None
+
+# --- Streamlit Application UI ---
+def main():
+    st.set_page_config(page_title="Specs HTML Converter", layout="wide")
+    logo_path = "VO-Logo.png"
+    if os.path.exists(logo_path):
+        col1_title, col2_logo = st.columns([4,1]); col1_title.title("GM Specs HTML Converter"); col2_logo.image(logo_path, width=113)
+    else:
+        st.title("GM Specs HTML Converter"); st.caption("Logo not found.")
+    with st.expander("Help / Instructions", expanded=False): st.markdown(get_instructions_html(), unsafe_allow_html=True)
+    st.subheader("1. Upload Excel File")
+    uploaded_file = st.file_uploader("Choose an .xlsx file", type="xlsx")
+    st.subheader("2. Configure Settings")
+    col1, col2 = st.columns(2)
+    auto_width_cb = col1.checkbox("Auto width for Spec Header", value=True, help="Automatically adjust first column width.")
+    th150_width_in = col2.text_input("Manual Spec Header Width", placeholder="e.g., 180px", help="Overrides auto-width.", disabled=auto_width_cb)
+    st.subheader("3. Convert")
+    if st.button("Convert to HTML"):
+        status_area = st.empty(); progress_bar = st.progress(0)
+        if uploaded_file:
+            status_area.info(f"Starting conversion for: {uploaded_file.name}...")
+            try:
+                output_df, error_msg = run_conversion_logic(uploaded_file, th150_width_in, auto_width_cb, progress_bar, status_area)
+                if output_df is not None and not output_df.empty:
+                    status_area.success("Conversion complete!"); progress_bar.empty()
+                    output_buffer = io.BytesIO()
+                    with pd.ExcelWriter(output_buffer, engine='openpyxl') as writer: output_df.to_excel(writer, index=False, sheet_name='ConvertedHTML')
+                    output_buffer.seek(0)
+                    dl_fn = f"{os.path.splitext(uploaded_file.name)[0]}_output_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+                    st.download_button("Download Output Excel File", output_buffer, file_name=dl_fn, mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                    st.markdown("---"); st.markdown("### Preview of Generated HTML (first 5 rows):")
+                    preview_df = output_df[['SKU', 'Region']].copy()
+                    preview_df['HTML_Preview'] = output_df['HTML'].apply(lambda x: f'<div style="max-height:200px;overflow-y:auto;border:1px solid #eee;padding:5px;">{x[:2000]}...</div>')
+                    st.markdown(preview_df.head().to_html(escape=False, index=False), unsafe_allow_html=True)
+                elif error_msg: progress_bar.empty()
+                else: status_area.error("An unexpected issue occurred."); progress_bar.empty()
+            except Exception as e:
+                status_area.error(f"A critical error occurred: {e}\n{traceback.format_exc()}"); progress_bar.empty()
+        else:
+            status_area.warning("Please upload an Excel file first.")
+    st.markdown("---"); st.markdown("<p style='text-align:center;color:gray;'>Developed by Mohit Dhaker © 2025</p>", unsafe_allow_html=True)
+
+if __name__ == "__main__":
+    main()
