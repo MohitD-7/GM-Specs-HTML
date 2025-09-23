@@ -637,9 +637,15 @@ def generate_tabbed_html(tabs_data, region, auto_width_enabled, th150_width_inpu
 
 # --- Core Conversion Logic (Same as before) ---
 def run_conversion_logic(input_file_buffer, th150_width_manual, auto_width_enabled, progress_bar, status_area):
+
     try:
+        # --- THIS IS THE MODIFIED LINE ---
+        # We add dtype=str to ensure all data, including percentages, is read as text.
         df = pd.read_excel(input_file_buffer, header=None, na_filter=False, dtype=str)
+        
+        # This next line is good practice but optional since dtype=str handles most cases.
         df = df.apply(lambda x: x.str.strip() if x.dtype == "object" else x)
+        
     except Exception as e:
         err_msg = f"Error reading Excel file: {str(e)}. Ensure it's closed and not corrupted."
         status_area.error(err_msg)
